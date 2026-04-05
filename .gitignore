@@ -50,8 +50,11 @@ next-env.d.ts
 /data/mission-control.db-shm
 /test-results
 
-# Smart Memory (separate repo)
-/smart-memory/
+# Smart Memory runtime data (submodule itself is tracked)
+/smart-memory/data/
+/smart-memory/__pycache__/
+/smart-memory/*.pyc
+/smart-memory/.venv/
 
 # Python packaging
 dist/

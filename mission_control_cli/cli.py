@@ -22,6 +22,7 @@ def main():
     sp_start = sub.add_parser("start", help="Start the dashboard and orchestrator")
     sp_start.add_argument("--port", type=int, default=3000, help="Dashboard port (default: 3000)")
     sp_start.add_argument("--no-orchestrator", action="store_true", help="Start dashboard only, no orchestrator")
+    sp_start.add_argument("--no-memory", action="store_true", help="Skip starting the Smart Memory service")
     sp_start.add_argument("--dev", action="store_true", help="Run in development mode (hot reload)")
     sp_start.add_argument("--workdir", type=str, default=None, help="Project working directory (default: current directory)")
 
@@ -45,6 +46,7 @@ def main():
         start_services(
             port=args.port,
             no_orchestrator=args.no_orchestrator,
+            no_memory=args.no_memory,
             dev=args.dev,
             workdir=args.workdir,
         )

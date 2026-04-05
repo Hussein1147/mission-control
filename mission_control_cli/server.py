@@ -124,8 +124,41 @@ def _ensure_deps(project_root: Path):
         print("Dependencies installed.")
 
 
-def start_services(port: int = 3000, no_orchestrator: bool = False, dev: bool = True, workdir: str = None):
-    """Start the Mission Control dashboard and orchestrator."""
+def _check_smart_memory_deps(project_root: Path) -> bool:
+    """Check if Smart Memory dependencies are installed."""
+    try:
+        import fastapi  # noqa
+        import sentence_transformers  # noqa
+        return True
+    except ImportError:
+        return False
+
+
+def _ensure_smart_memory_deps(project_root: Path):
+    """Install smart-memory requirements if needed."""
+    sm_dir = project_root / "smart-memory"
+    if not sm_dir.exists():
+        print("  Smart Memory: not found (submodule not initialized)")
+        return False
+
+    if not _check_smart_memory_deps(project_root):
+        req_file = sm_dir / "requirements-cpu.txt"
+        if req_file.exists():
+            print("  Installing Smart Memory dependencies...")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", str(req_file)],
+                capture_output=True,
+                timeout=300,
+            )
+        else:
+            print("  Smart Memory: install with 'pip install mission-control-ai[memory]'")
+            return False
+
+    return True
+
+
+def start_services(port: int = 3000, no_orchestrator: bool = False, no_memory: bool = False, dev: bool = True, workdir: str = None):
+    """Start the Mission Control dashboard, orchestrator, and Smart Memory."""
     # Check prerequisites
     node_version = _check_node()
     _check_npm()
@@ -188,6 +221,21 @@ def start_services(port: int = 3000, no_orchestrator: bool = False, dev: bool = 
         )
         pids["orchestrator"] = orch_proc.pid
 
+    # Start Smart Memory service
+    memory_proc = None
+    if not no_memory:
+        sm_dir = project_root / "smart-memory"
+        sm_server = sm_dir / "server.py"
+        if sm_server.exists() and _ensure_smart_memory_deps(project_root):
+            memory_proc = subprocess.Popen(
+                [sys.executable, "server.py"],
+                cwd=str(sm_dir),
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            pids["memory"] = memory_proc.pid
+
     _write_pids(pids)
 
     print()
@@ -196,6 +244,12 @@ def start_services(port: int = 3000, no_orchestrator: bool = False, dev: bool = 
         print(f"  Orchestrator: running                (PID {orch_proc.pid})")
     else:
         print("  Orchestrator: skipped (--no-orchestrator)")
+    if memory_proc:
+        print(f"  Smart Memory: running                (PID {memory_proc.pid})")
+    elif not no_memory:
+        print("  Smart Memory: not available (install with pip install mission-control-ai[memory])")
+    else:
+        print("  Smart Memory: skipped (--no-memory)")
     print()
     print("Mission Control is running. Use 'mission-control stop' to shut down.")
 
@@ -222,7 +276,7 @@ def stop_services():
         return
 
     stopped = []
-    for name in ["orchestrator", "dashboard"]:
+    for name in ["memory", "orchestrator", "dashboard"]:
         pid = pids.get(name)
         if pid and _is_pid_alive(pid):
             try:
@@ -264,6 +318,12 @@ def show_status():
     else:
         print("  Orchestrator: not started")
 
+    mem_pid = pids.get("memory")
+    if mem_pid and _is_pid_alive(mem_pid):
+        print(f"  Smart Memory: running (PID {mem_pid})")
+    elif mem_pid:
+        print("  Smart Memory: stopped")
+
     project_root = pids.get("project_root")
     if project_root:
         print(f"  Project:      {project_root}")
@@ -289,11 +349,11 @@ def init_workspace(force: bool = False):
         print(f"  cd mission-control && python3 -m mission_control_cli start")
         return
 
-    # Clone the repo
+    # Clone the repo with submodules
     print(f"Cloning Mission Control...")
     try:
         subprocess.run(
-            ["git", "clone", REPO_URL],
+            ["git", "clone", "--recurse-submodules", REPO_URL],
             cwd=str(cwd),
             check=True,
             timeout=120,

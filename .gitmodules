@@ -1,0 +1,3 @@
+[submodule "smart-memory"]
+	path = smart-memory
+	url = https://github.com/BluePointDigital/smart-memory.git
