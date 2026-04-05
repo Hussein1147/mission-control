@@ -142,6 +142,10 @@ type AgentConfig = {
   taskStartedAt?: string | null;
   autoScaled?: boolean;
   lastActive?: string | null;
+  currentChannelId?: string | null;
+  reasoningEffort?: string;
+  sandbox?: string;
+  allowedDirectories?: string[];
 };
 
 type ProviderPoolConfig = {
