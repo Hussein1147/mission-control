@@ -133,13 +133,9 @@ def start_services(port: int = 3000, no_orchestrator: bool = False, dev: bool = 
     project_root = Path(workdir) if workdir else _get_project_root()
     if not _is_mission_control_dir(project_root):
         print(f"Error: Could not find Mission Control project files.")
-        print(f"  Checked: {cwd}")
-        print(f"  Checked: {Path(__file__).parent.parent}")
         print()
-        print("To fix, either:")
-        print("  1. cd into your mission-control repo directory, then run 'mission-control start'")
-        print("  2. Use --workdir: mission-control start --workdir /path/to/mission-control")
-        print("  3. Clone the repo: git clone https://github.com/Hussein1147/mission-control.git")
+        print("Run 'python3 -m mission_control_cli init' to clone and set up the project,")
+        print("or cd into an existing mission-control directory first.")
         sys.exit(1)
 
     # Check for existing processes
@@ -273,54 +269,58 @@ def show_status():
         print(f"  Project:      {project_root}")
 
 
+REPO_URL = "https://github.com/Hussein1147/mission-control.git"
+
+
 def init_workspace(force: bool = False):
-    """Initialize a Mission Control workspace in the current directory."""
+    """Clone the Mission Control repo and set up the workspace."""
     cwd = Path.cwd()
 
     # Check if already initialized
-    if (cwd / "package.json").exists() and not force:
-        try:
-            pkg = json.loads((cwd / "package.json").read_text())
-            if pkg.get("name") == "mission-control":
-                print("This directory is already a Mission Control workspace.")
-                print("Use --force to overwrite.")
-                return
-        except (json.JSONDecodeError, KeyError):
-            pass
-
-    # Find bundled project files
-    bundled = Path(__file__).parent / "project_files"
-    if not bundled.exists():
-        # Dev mode — we're running from the repo directly
-        print("Error: No bundled project files found.")
-        print("If running from the repo, you're already in the workspace. Just use 'mission-control start'.")
+    if _is_mission_control_dir(cwd) and not force:
+        print("This directory is already a Mission Control workspace.")
+        print("Use --force to re-clone.")
         return
 
-    print(f"Initializing Mission Control workspace in {cwd}...")
+    # Check if mission-control subdirectory already exists
+    target = cwd / "mission-control"
+    if target.exists() and _is_mission_control_dir(target) and not force:
+        print(f"Mission Control already exists at {target}")
+        print(f"  cd mission-control && python3 -m mission_control_cli start")
+        return
 
-    # Copy project files
-    ignore = shutil.ignore_patterns(
-        "node_modules", ".next", "*.db", "*.db-wal", "*.db-shm",
-        "__pycache__", "*.pyc", ".git", "dist", "*.egg-info", "build",
+    # Clone the repo
+    print(f"Cloning Mission Control...")
+    try:
+        subprocess.run(
+            ["git", "clone", REPO_URL],
+            cwd=str(cwd),
+            check=True,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        print("Error: git not found. Please install git first.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: git clone failed (exit {e.returncode})")
+        sys.exit(1)
+
+    print(f"Installing dependencies...")
+    _check_node()
+    _check_npm()
+
+    result = subprocess.run(
+        ["npm", "install"],
+        cwd=str(target),
+        timeout=300,
     )
-    for item in bundled.iterdir():
-        dest = cwd / item.name
-        if dest.exists() and not force:
-            print(f"  Skipping {item.name} (exists, use --force to overwrite)")
-            continue
-        if item.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(item, dest, ignore=ignore)
-        else:
-            shutil.copy2(item, dest)
-        print(f"  Copied {item.name}")
-
-    # Create data directory if needed
-    data_dir = cwd / "data"
-    data_dir.mkdir(exist_ok=True)
+    if result.returncode != 0:
+        print("Warning: npm install failed. You can retry manually: cd mission-control && npm install")
 
     print()
-    print("Workspace initialized. Next steps:")
-    print("  1. Set your API key: export ANTHROPIC_API_KEY=sk-...")
-    print("  2. Start Mission Control: mission-control start")
+    print("Mission Control is ready!")
+    print()
+    print("Next steps:")
+    print(f"  cd mission-control")
+    print(f"  export ANTHROPIC_API_KEY=sk-...")
+    print(f"  python3 -m mission_control_cli start")
