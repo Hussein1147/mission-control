@@ -1,0 +1,12 @@
+recursive-include app *.ts *.tsx *.css *.json
+recursive-include components *.tsx *.ts
+recursive-include lib *.ts
+recursive-include roles *.md
+recursive-include agents *.md
+recursive-include public *
+recursive-include __tests__ *.ts *.test.ts
+include package.json package-lock.json
+include next.config.ts tsconfig.json tailwind.config.ts
+include orchestrator.ts
+include data/pool-config.json data/docs.json
+include AGENTS.md README.md

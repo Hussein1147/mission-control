@@ -1,0 +1,32 @@
+{
+  "version": "v1",
+  "timestamp": "2026-03-29T00:00:00.000000+00:00",
+  "data_source": "smoke_truncated_100_rows",
+  "covered_window_start": "N/A (smoke run)",
+  "pine_source_sha256": "ffacdcb67bb56fa80e7bf329251ae2524e4ea31d71de3fb964022a2e50707051",
+  "canonical_metrics": {
+    "trades": 0,
+    "net_pnl": 0.0,
+    "profit_factor": 0.0,
+    "max_drawdown": 0.0
+  },
+  "actual_metrics": {
+    "trades": 0,
+    "net_pnl": 0.0,
+    "profit_factor": null,
+    "max_drawdown": 0.0
+  },
+  "gate_checks": [],
+  "gate_passed": true,
+  "trade_summary": {
+    "trade_count": 0,
+    "net_pl": 0.0,
+    "profit_factor": null,
+    "max_drawdown": 0.0,
+    "long_pl": 0.0,
+    "short_pl": 0.0,
+    "winner_count": 0,
+    "loser_count": 0,
+    "be_count": 0
+  }
+}

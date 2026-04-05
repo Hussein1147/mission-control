@@ -1,0 +1,91 @@
+# Smoke pipeline — fast schema + gate check on every PR.
+# Contract: PIPELINE_CONTRACT.md §8 "PR CI (smoke)"
+# Target runtime: <60s | Job timeout: 90s (60s + 50% headroom)
+#
+# Prerequisites:
+#   The mnq_tv_debugger repo must be available as a sibling checkout.
+#   Update the 'repository' field below once mnq_tv_debugger has a GitHub remote.
+
+name: Smoke Pipeline
+
+on:
+  pull_request:
+
+env:
+  PIPELINE_INPUTS: mnq_tv_debugger/inputs
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2  # 90s rounded up; GHA granularity is minutes
+
+    steps:
+      - name: Checkout mission-control
+        uses: actions/checkout@v4
+
+      - name: Checkout pipeline repo
+        uses: actions/checkout@v4
+        with:
+          # TODO: replace with actual org/repo once mnq_tv_debugger is pushed
+          repository: ${{ github.repository_owner }}/mnq-tv-debugger
+          path: mnq_tv_debugger
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Copy test fixtures into pipeline inputs
+        run: |
+          mkdir -p "$PIPELINE_INPUTS"
+          cp __tests__/fixtures/smoke_5m.csv "$PIPELINE_INPUTS/smoke_5m.csv"
+          cp __tests__/fixtures/smoke_run.json "$PIPELINE_INPUTS/smoke_run.json"
+          echo "Fixtures copied to $PIPELINE_INPUTS"
+          ls -la "$PIPELINE_INPUTS"
+
+      - name: "Guard: verify fixture artifacts exist"
+        run: |
+          fail=0
+          for f in smoke_5m.csv smoke_run.json; do
+            if [ ! -f "$PIPELINE_INPUTS/$f" ]; then
+              echo "::error::FIXTURE WIRING FAILED: $PIPELINE_INPUTS/$f is missing. The fixture copy step did not produce this file. Check that __tests__/fixtures/$f exists in mission-control."
+              fail=1
+            else
+              echo "OK: $PIPELINE_INPUTS/$f present ($(wc -c < "$PIPELINE_INPUTS/$f") bytes)"
+            fi
+          done
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::Preflight fixture guard failed — this is a CI wiring issue, NOT a pipeline logic failure."
+            exit 1
+          fi
+
+      - name: Install pipeline package
+        run: pip install -e ./mnq_tv_debugger
+
+      # --- Smoke lane: fast checks, no simulation ---
+
+      - name: "Check: CLI --help exits 0"
+        run: mnq-tv-debugger --help
+
+      - name: "Check: package is importable"
+        run: python -c "import mnq_tv_debugger; print('OK: mnq_tv_debugger importable')"
+
+      - name: "Check: preflight passes"
+        working-directory: mnq_tv_debugger
+        run: mnq-tv-debugger preflight
+
+      - name: "Check: regression gate (schema-only smoke)"
+        working-directory: mnq_tv_debugger
+        run: mnq-tv-debugger smoke
+
+      # --- Upload logs on failure so the next person sees a reason, not a dead 143 ---
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-failure-logs
+          path: |
+            mnq_tv_debugger/outputs/smoke/
+            mnq_tv_debugger/outputs/canonical_pipeline/
+          retention-days: 7

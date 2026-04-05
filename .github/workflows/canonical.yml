@@ -1,0 +1,83 @@
+# Canonical pipeline — full replay + regression gate, scheduled.
+# Contract: PIPELINE_CONTRACT.md §8 "Scheduled Gate (canonical-pipeline)"
+# Measured runtime: ~104s | Budget: 300s (5 min) | Job timeout: 10 min (recommended)
+#
+# Prerequisites:
+#   The mnq_tv_debugger repo must be available as a sibling checkout.
+#   Update the 'repository' field below once mnq_tv_debugger has a GitHub remote.
+
+name: Canonical Pipeline
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Daily at 06:00 UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  canonical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # 5 min minimum per contract §6; 10 min recommended
+
+    steps:
+      - name: Checkout mission-control
+        uses: actions/checkout@v4
+
+      - name: Checkout pipeline repo
+        uses: actions/checkout@v4
+        with:
+          # TODO: replace with actual org/repo once mnq_tv_debugger is pushed
+          repository: ${{ github.repository_owner }}/mnq-tv-debugger
+          path: mnq_tv_debugger
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install pipeline package
+        run: pip install -e ./mnq_tv_debugger
+
+      # --- Canonical lane: full replay → regression gate → drift-check ---
+
+      - name: "Run: canonical-pipeline (replay + regression gate)"
+        working-directory: mnq_tv_debugger
+        run: |
+          timeout 300 mnq-tv-debugger canonical-pipeline 2> >(tee canonical_stderr.log >&2) || {
+            exit_code=$?
+            if [ "$exit_code" -eq 124 ]; then
+              echo "[harness] SIGTERM: canonical-pipeline exceeded timeout budget of 300s (measured baseline: ~104s)" >&2
+              exit 143
+            fi
+            exit "$exit_code"
+          }
+
+      - name: "Run: drift-check (verify gate sensitivity)"
+        working-directory: mnq_tv_debugger
+        run: mnq-tv-debugger drift-check
+
+      # --- Upload artifacts on failure ---
+
+      - name: Capture stderr log
+        if: failure()
+        working-directory: mnq_tv_debugger
+        run: |
+          mkdir -p outputs/canonical_pipeline
+          cp canonical_stderr.log outputs/canonical_pipeline/ 2>/dev/null || true
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-failure-logs
+          path: |
+            mnq_tv_debugger/outputs/canonical_pipeline/
+            mnq_tv_debugger/outputs/analysis/
+          retention-days: 14
+
+      - name: Upload success artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-run-artifact
+          path: mnq_tv_debugger/outputs/canonical_pipeline/canonical_run.json
+          retention-days: 30
