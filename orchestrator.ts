@@ -18,6 +18,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { buildCodexExecArgs } from "@/lib/agent-command-config";
+import type { SharedTask, AgentConfig, AgentMessage, ChannelMessage, ProjectConfig, ProjectPhaseMetadata, DocEntry, TaskAttachment, AgentPoolConfig, ProviderPoolConfig, LoopConfig, LoopIteration } from "@/lib/mission-control-data";
 
 const API_BASE = "http://127.0.0.1:3000/api";
 const SMART_MEMORY_BASE = "http://127.0.0.1:8000";
@@ -99,118 +100,7 @@ async function ingestToSmartMemory(agentId: string, sessionId: string, taskTitle
   });
 }
 
-type TaskAttachment = {
-  id: string;
-  name: string;
-  type: "file" | "path";
-  path: string;
-  mimeType?: string;
-  size?: number;
-  addedBy: string;
-  addedAt: string;
-};
-
-type SharedTask = {
-  id: string;
-  title: string;
-  description: string;
-  assignee: string;
-  status: string;
-  priority: string;
-  createdBy: string;
-  project?: string;
-  result?: string;
-  blocked?: boolean;
-  blockedReason?: string;
-  attachments?: TaskAttachment[];
-  dependsOn?: string[];
-  preferredRole?: string;
-  taskType?: "standard" | "loop";
-  loopConfig?: LoopConfig;
-};
-
-type AgentConfig = {
-  id: string;
-  name: string;
-  provider: string;
-  model?: string;
-  role: string;
-  file: string;
-  status: string;
-  currentTaskId?: string | null;
-  currentTaskTitle?: string | null;
-  taskStartedAt?: string | null;
-  autoScaled?: boolean;
-  lastActive?: string | null;
-  currentChannelId?: string | null;
-  reasoningEffort?: string;
-  sandbox?: string;
-  allowedDirectories?: string[];
-};
-
-type ProviderPoolConfig = {
-  maxInstances: number;
-  defaultModel?: string;
-  defaultRole: string;
-};
-
-type AgentPoolConfig = {
-  enabled: boolean;
-  maxAgents: number;
-  providers: Record<string, ProviderPoolConfig>;
-  scaleUpThreshold: number;
-  scaleDownAfterIdleMinutes: number;
-};
-
-type AgentMessage = {
-  id: string;
-  from: string;
-  to: string;
-  content: string;
-  read: boolean;
-};
-
-type ChannelMessage = {
-  id: string;
-  channelId: string;
-  from: string;
-  content: string;
-  taskId?: string;
-  deliberationId?: string;
-  timestamp: string;
-};
-
-type ProjectPhaseMetadata = {
-  contributedAgents: string[];
-  maxRounds: number;
-  currentRound: number;
-  phaseStartedAt: string;
-  channelId: string;
-  deliberationId: string;
-  waitingForHuman?: boolean;    // true = deliberation paused, waiting for user input
-  waitingReason?: string;       // summary of what the user needs to address
-};
-
-type ProjectConfig = {
-  id: string;
-  name: string;
-  description: string;
-  status?: "draft" | "active" | "paused" | "completed";
-  phase?: "discovery" | "execution" | "retrospective" | "completed";
-  phaseMetadata?: ProjectPhaseMetadata;
-  attachments?: TaskAttachment[];
-  dependsOn?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type DocEntry = {
-  id: string;
-  title: string;
-  content: string;
-  project?: string;
-  author: string;
-};
+// Types imported from @/lib/mission-control-data
 
 // --- Agent Spawning ---
 
@@ -1336,22 +1226,6 @@ CRITICAL: When you decide to take an action, you MUST include the ACTION: block 
 }
 
 // --- Loop Task Processing ---
-
-type LoopIteration = {
-  iteration: number;
-  result: string;
-  metricValue?: string;
-  timestamp: string;
-};
-
-type LoopConfig = {
-  objective: string;
-  metric: string;
-  maxIterations: number;
-  currentIteration: number;
-  iterationHistory: LoopIteration[];
-  status: "running" | "paused" | "completed" | "stopped";
-};
 
 async function processLoopTask(agent: AgentConfig, task: SharedTask & { loopConfig: LoopConfig }) {
   const agentId = agent.id;
