@@ -11,28 +11,41 @@ from pathlib import Path
 
 
 def _get_project_root() -> Path:
-    """Find the bundled Next.js project files.
+    """Find the Next.js project files.
 
     Priority:
     1. Current working directory (if it has package.json with mission-control)
-    2. The installed package's project_files/ directory
+    2. Repo root relative to this Python package (../package.json from mission_control_cli/)
+    3. The installed package's project_files/ directory (future: PyPI bundle)
     """
+    # Check cwd
     cwd = Path.cwd()
-    if (cwd / "package.json").exists():
-        try:
-            pkg = json.loads((cwd / "package.json").read_text())
-            if pkg.get("name") == "mission-control":
-                return cwd
-        except (json.JSONDecodeError, KeyError):
-            pass
+    if _is_mission_control_dir(cwd):
+        return cwd
 
-    # Fall back to bundled files
+    # Check repo root (one level up from mission_control_cli/)
+    repo_root = Path(__file__).parent.parent
+    if _is_mission_control_dir(repo_root):
+        return repo_root
+
+    # Check for bundled files (future PyPI distribution)
     bundled = Path(__file__).parent / "project_files"
     if bundled.exists():
         return bundled
 
-    # Last resort: assume cwd
     return cwd
+
+
+def _is_mission_control_dir(p: Path) -> bool:
+    """Check if a directory is a Mission Control project root."""
+    pkg_json = p / "package.json"
+    if pkg_json.exists():
+        try:
+            pkg = json.loads(pkg_json.read_text())
+            return pkg.get("name") == "mission-control"
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return False
 
 
 def _pid_file() -> Path:
@@ -118,9 +131,15 @@ def start_services(port: int = 3000, no_orchestrator: bool = False, dev: bool = 
     _check_npm()
 
     project_root = Path(workdir) if workdir else _get_project_root()
-    if not (project_root / "package.json").exists():
-        print(f"Error: No package.json found in {project_root}")
-        print("Run 'mission-control init' to create a workspace, or cd into your mission-control directory.")
+    if not _is_mission_control_dir(project_root):
+        print(f"Error: Could not find Mission Control project files.")
+        print(f"  Checked: {cwd}")
+        print(f"  Checked: {Path(__file__).parent.parent}")
+        print()
+        print("To fix, either:")
+        print("  1. cd into your mission-control repo directory, then run 'mission-control start'")
+        print("  2. Use --workdir: mission-control start --workdir /path/to/mission-control")
+        print("  3. Clone the repo: git clone https://github.com/Hussein1147/mission-control.git")
         sys.exit(1)
 
     # Check for existing processes
