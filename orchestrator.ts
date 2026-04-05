@@ -404,7 +404,9 @@ async function spawnCodex(prompt: string, agent?: AgentConfig, idleTimeoutMin?: 
     model: agent?.model,
     allowedDirectories: agent?.allowedDirectories,
   };
-  return spawnWithStdin("/opt/homebrew/bin/codex", buildCodexExecArgs(process.env, options), prompt, "Codex", idleTimeoutMin);
+  // Use codex from PATH — users install via: npm install -g @openai/codex
+  const codexBin = process.env.CODEX_BIN || "codex";
+  return spawnWithStdin(codexBin, buildCodexExecArgs(process.env, options), prompt, "Codex", idleTimeoutMin);
 }
 
 async function spawnAgent(agent: AgentConfig, prompt: string, idleTimeoutMin?: number): Promise<string> {
